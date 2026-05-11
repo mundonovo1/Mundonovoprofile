@@ -231,6 +231,8 @@ function doPost(e) {
         <th class="out-col">Filter + Coffee (g)</th>
         <th class="tds-col">EY (%)</th>
         <th>Result</th>
+        <th>Coffee Details</th>
+        <th>Taste Profile</th>
         <th>Notes</th>
       </tr>
     </thead>
@@ -301,7 +303,13 @@ var RAW = [
   ["Control 1","All","Light Roast B&B",15,16,240,92,60,2,90,"Half","Fellow 2.3",26,95.6,"",false],
   ["Add 1g","All","Light Roast B&B",16,15,240,92,60,2,90,"Half","Fellow 2.3",26,95.6,"",false],
   ["Add 1g+Bloom 70","All","Light Roast B&B",15,16,240,92,70,2,85,"Half","Fellow 2.3",26,95.6,"",false],
-  ["All together","All","Light Roast B&B",16,15,240,92,70,2,85,"Half","Fellow 2.3",26,95.6,"",false]
+  ["All together","All","Light Roast B&B",16,15,240,92,70,2,85,"Half","Fellow 2.3",26,95.6,"",false],
+  ["","","",0,0,0,"",0,0,0,"","",0,0,"",false],
+  ["","","",0,0,0,"",0,0,0,"","",0,0,"",false],
+  ["","","",0,0,0,"",0,0,0,"","",0,0,"",false],
+  ["","","",0,0,0,"",0,0,0,"","",0,0,"",false],
+  ["","","",0,0,0,"",0,0,0,"","",0,0,"",false],
+  ["","","",0,0,0,"",0,0,0,"","",0,0,"",false]
 ];
 
 // ── Hardcoded sync URL — works on any device automatically ───────
@@ -462,40 +470,110 @@ function renderTable() {
     var tdstemp  = stored.tdstemp  !== undefined ? stored.tdstemp  : '';
     var output   = stored.output   !== undefined ? stored.output   : '';
     var filterwt = stored.filterwt !== undefined ? stored.filterwt : '';
-    var ey     = (tds !== '' && output !== '') ? calcEY(parseFloat(tds), parseFloat(output), dose) : null;
+    var dose     = row[3];
+    var ey     = (tds !== '' && output !== '' && dose > 0) ? calcEY(parseFloat(tds), parseFloat(output), dose) : null;
     var result = getResult(ey);
     totals[result]++; totals.total++;
 
     if (filterCat    && cat !== filterCat)     return;
     if (filterResult && result !== filterResult) return;
-    if (search && (cat+' '+sub+' '+coffee+' '+notes+' '+(stored.notes||'')).toLowerCase().indexOf(search)===-1) return;
+    if (search && (cat+' '+sub+' '+coffee+' '+notes+' '+(stored.notes||'')+' '+(stored.coffeeDetails||'')).toLowerCase().indexOf(search)===-1) return;
 
-    var userNote  = stored.notes !== undefined ? stored.notes : notes;
-    var noteFilled = userNote !== '' ? ' filled' : '';
+    // Determine if this is a blank/custom row
+    var isBlank = (cat === '' && coffee === '');
+
+    // For blank rows, use stored values for all static fields too
+    var sCat      = isBlank ? (stored.cat      || '') : cat;
+    var sSub      = isBlank ? (stored.sub      || '') : sub;
+    var sCoffee   = isBlank ? (stored.coffee   || '') : coffee;
+    var sDose     = isBlank ? (stored.dose     || '') : (dose > 0 ? dose : '');
+    var sRatio    = isBlank ? (stored.ratio    || '') : (row[4] > 0 ? row[4] : '');
+    var sVol      = isBlank ? (stored.vol      || '') : (row[5] > 0 ? row[5] : '');
+    var sTemp     = isBlank ? (stored.temp     || '') : (temp || '');
+    var sBloom    = isBlank ? (stored.bloom    || '') : (bloom > 0 ? bloom : '');
+    var sPulses   = isBlank ? (stored.pulses   || '') : (pulses > 0 ? pulses : '');
+    var smlPulse  = isBlank ? (stored.mlPulse  || '') : (mlPulse > 0 ? mlPulse : '');
+    var sSpiral   = isBlank ? (stored.spiral   || '') : spiral;
+    var sGrind    = isBlank ? (stored.grind    || '') : grind;
+    var sInterval = isBlank ? (stored.interval || '') : (interval > 0 ? interval : '');
+    var sTime     = isBlank ? (stored.time     || '') : (time > 0 ? time : '');
+
+    // EY: for blank rows use stored dose
+    var eyDose = isBlank ? (parseFloat(stored.dose) || 0) : dose;
+    var ey     = (tds !== '' && output !== '' && eyDose > 0) ? calcEY(parseFloat(tds), parseFloat(output), eyDose) : null;
+    var result = getResult(ey);
+    totals[result]++; totals.total++;
+
+    if (filterCat    && sCat !== filterCat)      return;
+    if (filterResult && result !== filterResult)  return;
+    if (search && (sCat+' '+sSub+' '+sCoffee+' '+notes+' '+(stored.notes||'')+' '+(stored.coffeeDetails||'')).toLowerCase().indexOf(search)===-1) return;
+
+    var userNote          = stored.notes          !== undefined ? stored.notes          : notes;
+    var userCoffeeDetails = stored.coffeeDetails  !== undefined ? stored.coffeeDetails  : '';
+    var userTasteProfile  = stored.tasteProfile   !== undefined ? stored.tasteProfile   : '';
+    var noteFilled        = userNote !== '' ? ' filled' : '';
+    var detailsFilled     = userCoffeeDetails !== '' ? ' filled' : '';
+    var tasteFilled       = userTasteProfile  !== '' ? ' filled' : '';
+
+    // Input style helpers
+    function si(val, field, placeholder, type, step, min, max) {
+      var extra = max !== undefined ? ' max="'+max+'"' : '';
+      return '<input class="val-input'+(val!==''?' filled':'')+'" type="'+(type||'text')+'" '+(step?'step="'+step+'"':'')+' '+(min!==undefined?'min="'+min+'"':'')+extra+' placeholder="'+placeholder+'" value="'+escHtml(String(val))+'" data-key="'+key+'" data-field="'+field+'" oninput="onInput(this)" onchange="onInput(this)" style="width:100%">';
+    }
 
     var tr = document.createElement('tr');
-    tr.innerHTML =
-      '<td class="cat">'  + cat    + '</td>' +
-      '<td class="sub">'  + sub    + '</td>' +
-      '<td>'              + coffee + '</td>' +
-      '<td class="num">'  + dose   + 'g</td>' +
-      '<td class="num">1:'+ ratio  + '</td>' +
-      '<td class="num">'  + targetVol + '</td>' +
-      '<td class="num">'  + temp   + '</td>' +
-      '<td class="num">'  + bloom  + '</td>' +
-      '<td class="num">'  + pulses + '</td>' +
-      '<td class="num">'  + mlPulse+ '</td>' +
-      '<td>'              + spiral + '</td>' +
-      '<td>'              + grind  + '</td>' +
-      '<td class="num">'  + interval + 's</td>' +
-      '<td class="num">'  + time   + 's</td>' +
-      '<td class="tds-col" style="padding:4px 6px;"><input class="val-input'+(tds!==''?' filled':'')+'" type="number" step="0.01" min="0" max="5" placeholder="0.00" value="'+tds+'" data-key="'+key+'" data-field="tds" oninput="onInput(this)" onchange="onInput(this)"></td>' +
-      '<td class="tds-col" style="padding:4px 6px;"><input class="val-input'+(tdstemp!==''?' filled':'')+'" type="number" step="0.1" min="0" max="100" placeholder="°C" value="'+tdstemp+'" data-key="'+key+'" data-field="tdstemp" oninput="onInput(this)" onchange="onInput(this)"></td>' +
-      '<td class="out-col" style="padding:4px 6px;"><input class="val-input'+(output!==''?' filled':'')+'" type="number" step="0.1" min="0" placeholder="0.0" value="'+output+'" data-key="'+key+'" data-field="output" oninput="onInput(this)" onchange="onInput(this)"></td>' +
-      '<td class="out-col" style="padding:4px 6px;"><input class="val-input'+(filterwt!==''?' filled':'')+'" type="number" step="0.1" min="0" placeholder="0.0g" value="'+filterwt+'" data-key="'+key+'" data-field="filterwt" oninput="onInput(this)" onchange="onInput(this)"></td>' +
-      '<td class="num tds-col" id="ey_'+i+'">'+(ey!==null?ey.toFixed(2)+'%':'&mdash;')+'</td>' +
-      '<td id="res_'+i+'">'+ resultBadge(result,ey) +'</td>' +
-      '<td class="notes-cell"><textarea class="notes-input'+noteFilled+'" rows="1" placeholder="Add note..." data-key="'+key+'" data-field="notes" oninput="onNoteInput(this)">'+escHtml(userNote)+'</textarea></td>';
+    if (isBlank) {
+      tr.style.background = '#222';
+      tr.innerHTML =
+        '<td style="padding:3px 4px;">'+si(sCat,     'cat',     'Category', 'text')+'</td>' +
+        '<td style="padding:3px 4px;">'+si(sSub,     'sub',     'Sub-var',  'text')+'</td>' +
+        '<td style="padding:3px 4px;">'+si(sCoffee,  'coffee',  'Coffee',   'text')+'</td>' +
+        '<td style="padding:3px 4px;">'+si(sDose,    'dose',    'g',   'number','1',0)+'</td>' +
+        '<td style="padding:3px 4px;">'+si(sRatio,   'ratio',   'ratio','number','1',0)+'</td>' +
+        '<td style="padding:3px 4px;">'+si(sVol,     'vol',     'ml',  'number','1',0)+'</td>' +
+        '<td style="padding:3px 4px;">'+si(sTemp,    'temp',    '°C',  'number','1',0)+'</td>' +
+        '<td style="padding:3px 4px;">'+si(sBloom,   'bloom',   'ml',  'number','1',0)+'</td>' +
+        '<td style="padding:3px 4px;">'+si(sPulses,  'pulses',  '#',   'number','1',0)+'</td>' +
+        '<td style="padding:3px 4px;">'+si(smlPulse, 'mlPulse', 'ml',  'number','1',0)+'</td>' +
+        '<td style="padding:3px 4px;">'+si(sSpiral,  'spiral',  'spiral','text')+'</td>' +
+        '<td style="padding:3px 4px;">'+si(sGrind,   'grind',   'grind', 'text')+'</td>' +
+        '<td style="padding:3px 4px;">'+si(sInterval,'interval','s',  'number','1',0)+'</td>' +
+        '<td style="padding:3px 4px;">'+si(sTime,    'time',    's',  'number','1',0)+'</td>' +
+        '<td class="tds-col" style="padding:3px 4px;"><input class="val-input'+(tds!==''?' filled':'')+'" type="number" step="0.01" min="0" max="5" placeholder="0.00" value="'+tds+'" data-key="'+key+'" data-field="tds" oninput="onInput(this)" onchange="onInput(this)"></td>' +
+        '<td class="tds-col" style="padding:3px 4px;"><input class="val-input'+(tdstemp!==''?' filled':'')+'" type="number" step="0.1" min="0" max="100" placeholder="°C" value="'+tdstemp+'" data-key="'+key+'" data-field="tdstemp" oninput="onInput(this)" onchange="onInput(this)"></td>' +
+        '<td class="out-col" style="padding:3px 4px;"><input class="val-input'+(output!==''?' filled':'')+'" type="number" step="0.1" min="0" placeholder="0.0" value="'+output+'" data-key="'+key+'" data-field="output" oninput="onInput(this)" onchange="onInput(this)"></td>' +
+        '<td class="out-col" style="padding:3px 4px;"><input class="val-input'+(filterwt!==''?' filled':'')+'" type="number" step="0.1" min="0" placeholder="0.0g" value="'+filterwt+'" data-key="'+key+'" data-field="filterwt" oninput="onInput(this)" onchange="onInput(this)"></td>' +
+        '<td class="num tds-col" id="ey_'+i+'">'+(ey!==null?ey.toFixed(2)+'%':'&mdash;')+'</td>' +
+        '<td id="res_'+i+'">'+ resultBadge(result,ey) +'</td>' +
+        '<td class="notes-cell"><textarea class="notes-input'+detailsFilled+'" rows="1" placeholder="Origin, process, roast..." data-key="'+key+'" data-field="coffeeDetails" oninput="onNoteInput(this)">'+escHtml(userCoffeeDetails)+'</textarea></td>' +
+        '<td class="notes-cell"><textarea class="notes-input'+tasteFilled+'" rows="1" placeholder="Fruity, nutty, bitter..." data-key="'+key+'" data-field="tasteProfile" oninput="onNoteInput(this)">'+escHtml(userTasteProfile)+'</textarea></td>' +
+        '<td class="notes-cell"><textarea class="notes-input'+noteFilled+'" rows="1" placeholder="Add note..." data-key="'+key+'" data-field="notes" oninput="onNoteInput(this)">'+escHtml(userNote)+'</textarea></td>';
+    } else {
+      tr.innerHTML =
+        '<td class="cat">'  + sCat    + '</td>' +
+        '<td class="sub">'  + sSub    + '</td>' +
+        '<td>'              + sCoffee + '</td>' +
+        '<td class="num">'  + (sDose?sDose+'g':'') + '</td>' +
+        '<td class="num">'  + (sRatio?'1:'+sRatio:'') + '</td>' +
+        '<td class="num">'  + sVol    + '</td>' +
+        '<td class="num">'  + sTemp   + '</td>' +
+        '<td class="num">'  + sBloom  + '</td>' +
+        '<td class="num">'  + sPulses + '</td>' +
+        '<td class="num">'  + smlPulse+ '</td>' +
+        '<td>'              + sSpiral + '</td>' +
+        '<td>'              + sGrind  + '</td>' +
+        '<td class="num">'  + (sInterval?sInterval+'s':'') + '</td>' +
+        '<td class="num">'  + (sTime?sTime+'s':'') + '</td>' +
+        '<td class="tds-col" style="padding:4px 6px;"><input class="val-input'+(tds!==''?' filled':'')+'" type="number" step="0.01" min="0" max="5" placeholder="0.00" value="'+tds+'" data-key="'+key+'" data-field="tds" oninput="onInput(this)" onchange="onInput(this)"></td>' +
+        '<td class="tds-col" style="padding:4px 6px;"><input class="val-input'+(tdstemp!==''?' filled':'')+'" type="number" step="0.1" min="0" max="100" placeholder="°C" value="'+tdstemp+'" data-key="'+key+'" data-field="tdstemp" oninput="onInput(this)" onchange="onInput(this)"></td>' +
+        '<td class="out-col" style="padding:4px 6px;"><input class="val-input'+(output!==''?' filled':'')+'" type="number" step="0.1" min="0" placeholder="0.0" value="'+output+'" data-key="'+key+'" data-field="output" oninput="onInput(this)" onchange="onInput(this)"></td>' +
+        '<td class="out-col" style="padding:4px 6px;"><input class="val-input'+(filterwt!==''?' filled':'')+'" type="number" step="0.1" min="0" placeholder="0.0g" value="'+filterwt+'" data-key="'+key+'" data-field="filterwt" oninput="onInput(this)" onchange="onInput(this)"></td>' +
+        '<td class="num tds-col" id="ey_'+i+'">'+(ey!==null?ey.toFixed(2)+'%':'&mdash;')+'</td>' +
+        '<td id="res_'+i+'">'+ resultBadge(result,ey) +'</td>' +
+        '<td class="notes-cell"><textarea class="notes-input'+detailsFilled+'" rows="1" placeholder="Origin, process, roast..." data-key="'+key+'" data-field="coffeeDetails" oninput="onNoteInput(this)">'+escHtml(userCoffeeDetails)+'</textarea></td>' +
+        '<td class="notes-cell"><textarea class="notes-input'+tasteFilled+'" rows="1" placeholder="Fruity, nutty, bitter..." data-key="'+key+'" data-field="tasteProfile" oninput="onNoteInput(this)">'+escHtml(userTasteProfile)+'</textarea></td>' +
+        '<td class="notes-cell"><textarea class="notes-input'+noteFilled+'" rows="1" placeholder="Add note..." data-key="'+key+'" data-field="notes" oninput="onNoteInput(this)">'+escHtml(userNote)+'</textarea></td>';
+    }
     tbody.appendChild(tr);
   });
   updateStats(totals);
@@ -507,16 +585,20 @@ function onInput(el) {
   if (val==='') { delete storedData[key][field]; } else { storedData[key][field]=val; }
   el.className = 'val-input' + (val!==''?' filled':'');
   saveData();
-  var idx=parseInt(key.replace('row_','')), row=RAW[idx], dose=row[3];
-  var stored=storedData[key]||{};
-  var tds=stored.tds!==undefined?parseFloat(stored.tds):NaN;
-  var output=stored.output!==undefined?parseFloat(stored.output):NaN;
-  var ey=(!isNaN(tds)&&!isNaN(output))?calcEY(tds,output,dose):null;
-  var result=getResult(ey);
-  var eyCell=document.getElementById('ey_'+idx), resCell=document.getElementById('res_'+idx);
-  if (eyCell) eyCell.innerHTML = ey!==null ? ey.toFixed(2)+'%':'&mdash;';
-  if (resCell) resCell.innerHTML = resultBadge(result,ey);
-  updateStatsFromData();
+  // Only recalc EY for measurement fields
+  if (field==='tds'||field==='output'||field==='dose') {
+    var idx=parseInt(key.replace('row_','')), row=RAW[idx];
+    var stored=storedData[key]||{};
+    var tds=stored.tds!==undefined?parseFloat(stored.tds):NaN;
+    var output=stored.output!==undefined?parseFloat(stored.output):NaN;
+    var dose=stored.dose!==undefined?parseFloat(stored.dose):(row[3]||0);
+    var ey=(!isNaN(tds)&&!isNaN(output)&&dose>0)?calcEY(tds,output,dose):null;
+    var result=getResult(ey);
+    var eyCell=document.getElementById('ey_'+idx), resCell=document.getElementById('res_'+idx);
+    if (eyCell) eyCell.innerHTML = ey!==null ? ey.toFixed(2)+'%':'&mdash;';
+    if (resCell) resCell.innerHTML = resultBadge(result,ey);
+    updateStatsFromData();
+  }
 }
 
 function onNoteInput(el) {
@@ -571,14 +653,14 @@ function clearAllData() {
 }
 
 function exportCSV() {
-  var headers=['Category','Sub-Variable','Coffee','Dose(g)','Ratio','TargetVol(ml)','Temp','Bloom(ml)','Pulses','ml/Pulse','Spiral','Grind','Interval(s)','Time(s)','TDS(%)','TDS Temp(°C)','Output(g)','Filter+Coffee(g)','EY(%)','Result','Notes'];
+  var headers=['Category','Sub-Variable','Coffee','Dose(g)','Ratio','TargetVol(ml)','Temp','Bloom(ml)','Pulses','ml/Pulse','Spiral','Grind','Interval(s)','Time(s)','TDS(%)','TDS Temp(°C)','Output(g)','Filter+Coffee(g)','EY(%)','Result','Coffee Details','Taste Profile','Notes'];
   var rows=RAW.map(function(row,i){
     var key=rowKey(i),s=storedData[key]||{};
     var tds=s.tds||'',tdstemp=s.tdstemp||'',output=s.output||'',filterwt=s.filterwt||'';
-    var ey=(tds&&output)?calcEY(parseFloat(tds),parseFloat(output),row[3]):null;
+    var ey=(tds&&output&&row[3]>0)?calcEY(parseFloat(tds),parseFloat(output),row[3]):null;
     var result=getResult(ey);
     var rL={good:'Acceptable',under:'Under Extracted',over:'Over Extracted',pending:'Pending'};
-    return [row[0],row[1],row[2],row[3],'1:'+row[4],row[5],row[6],row[7],row[8],row[9],row[10],row[11],row[12],row[13],tds,tdstemp,output,filterwt,ey!==null?ey.toFixed(2):'',rL[result],s.notes!==undefined?s.notes:row[14]];
+    return [row[0],row[1],row[2],row[3],'1:'+row[4],row[5],row[6],row[7],row[8],row[9],row[10],row[11],row[12],row[13],tds,tdstemp,output,filterwt,ey!==null?ey.toFixed(2):'',rL[result],s.coffeeDetails||'',s.tasteProfile||'',s.notes!==undefined?s.notes:row[14]];
   });
   var csv=[headers].concat(rows).map(function(r){return r.map(function(v){return '"'+String(v).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
   var a=document.createElement('a');
